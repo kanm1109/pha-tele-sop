@@ -1,0 +1,15 @@
+[Unit]
+Description=Discord Panel Bot -> Telegram relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kan
+WorkingDirectory=/opt/panel-bot
+ExecStart=/opt/panel-bot/.venv/bin/python /opt/panel-bot/bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
