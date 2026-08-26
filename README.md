@@ -44,10 +44,10 @@ Gõ `/dieukhien` (slash command, cần chờ vài giây để Discord sync) ho�
 
 ### Lệnh `!spam` / `!stopspam` (chỉ admin)
 
-- `!spam`: gửi lặp lại tin "Kiểm tra kết nối." sang Telegram mỗi `SPAM_INTERVAL_MS` (mặc định 5000ms = 5 giây), chạy nền bất đồng bộ (không chặn bot), tự dừng sau tối đa `SPAM_MAX_ITERATIONS` lần (mặc định 720 lần, ~1 giờ) nếu quên tắt.
+- `!spam`: gửi lặp lại các tin trong `SPAM_MESSAGES` (mặc định 1 tin "Kiểm tra kết nối.") sang Telegram — nghỉ `DELAY_BETWEEN_MSGS_MS` (mặc định 1000ms) giữa từng tin trong 1 vòng, nghỉ `LOOP_INTERVAL_MS` (mặc định 4000ms) giữa các vòng. Chạy nền bất đồng bộ (không chặn bot), tự dừng sau tối đa `SPAM_MAX_ITERATIONS` vòng (mặc định 720, ~1 giờ) nếu quên tắt.
 - `!stopspam`: dừng ngay tiến trình `!spam` đang chạy.
 - Cả 2 lệnh yêu cầu quyền **Administrator** trên server Discord — người không có quyền sẽ nhận phản hồi từ chối.
-- Chỉnh `SPAM_INTERVAL_MS`/`SPAM_MAX_ITERATIONS` trực tiếp trong `bot.py` nếu cần đổi tần suất/giới hạn.
+- Chỉnh `SPAM_MESSAGES`/`LOOP_INTERVAL_MS`/`DELAY_BETWEEN_MSGS_MS`/`SPAM_MAX_ITERATIONS` trực tiếp trong `bot.py` nếu cần đổi nội dung/tần suất/giới hạn.
 
 ## Deploy lên VPS (Ubuntu/Debian, dùng systemd)
 

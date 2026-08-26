@@ -40,10 +40,11 @@ ACTIONS = {
     ),
 }
 
-# !spam config — repeats a check-in message on a timer until !stopspam or the safety cap is hit.
-SPAM_MESSAGE = "Kiểm tra kết nối."
-SPAM_INTERVAL_MS = 5000
-SPAM_MAX_ITERATIONS = 720  # safety cap: ~1 hour at the interval above, in case !stopspam is forgotten
+# !spam config — repeats check-in message(s) on a timer until !stopspam or the safety cap is hit.
+SPAM_MESSAGES = ["Kiểm tra kết nối."]
+LOOP_INTERVAL_MS = 4000       # nghỉ giữa các vòng lặp
+DELAY_BETWEEN_MSGS_MS = 1000  # nghỉ giữa từng tin trong 1 vòng (nếu SPAM_MESSAGES có nhiều tin)
+SPAM_MAX_ITERATIONS = 720  # safety cap: max vòng lặp (~1 giờ ở tốc độ trên), in case !stopspam is forgotten
 
 spam_task: asyncio.Task | None = None
 spam_sent_count = 0
@@ -208,20 +209,24 @@ async def panel_prefix(ctx: commands.Context) -> None:
 
 
 async def _spam_loop() -> None:
-    """Send SPAM_MESSAGE to Telegram every SPAM_INTERVAL_MS until cancelled or capped."""
+    """Send SPAM_MESSAGES to Telegram every LOOP_INTERVAL_MS until cancelled or capped."""
     global spam_task, spam_sent_count
     session: aiohttp.ClientSession = bot.http_session
     await bot.change_presence(activity=discord.Game(name="🔁 !spam đang chạy..."))
+    cycle = 0
     try:
-        while spam_sent_count < SPAM_MAX_ITERATIONS:
-            spam_sent_count += 1
-            try:
-                await send_telegram_message(session, SPAM_MESSAGE)
-                logger.info("spam: sent message %d/%d", spam_sent_count, SPAM_MAX_ITERATIONS)
-            except Exception:
-                logger.exception("spam: failed to send message %d", spam_sent_count)
-            await asyncio.sleep(SPAM_INTERVAL_MS / 1000)
-        logger.info("spam: reached safety cap of %d messages, stopping automatically", SPAM_MAX_ITERATIONS)
+        while cycle < SPAM_MAX_ITERATIONS:
+            cycle += 1
+            for msg in SPAM_MESSAGES:
+                spam_sent_count += 1
+                try:
+                    await send_telegram_message(session, msg)
+                    logger.info("spam: sent message %d (cycle %d/%d)", spam_sent_count, cycle, SPAM_MAX_ITERATIONS)
+                except Exception:
+                    logger.exception("spam: failed to send message %d", spam_sent_count)
+                await asyncio.sleep(DELAY_BETWEEN_MSGS_MS / 1000)
+            await asyncio.sleep(LOOP_INTERVAL_MS / 1000)
+        logger.info("spam: reached safety cap of %d cycles, stopping automatically", SPAM_MAX_ITERATIONS)
     except asyncio.CancelledError:
         logger.info("spam: stopped after %d message(s)", spam_sent_count)
         raise
@@ -245,8 +250,8 @@ async def cmd_spam(ctx: commands.Context) -> None:
     spam_started_at = time.time()
     spam_task = bot.loop.create_task(_spam_loop())
     await ctx.send(
-        f"✅ Đã bắt đầu gửi lặp lại mỗi {SPAM_INTERVAL_MS}ms "
-        f"(tự dừng sau tối đa {SPAM_MAX_ITERATIONS} lần). Gõ `!spam` lại để xem tiến độ, "
+        f"✅ Đã bắt đầu — mỗi tin cách nhau {DELAY_BETWEEN_MSGS_MS}ms, mỗi vòng cách nhau {LOOP_INTERVAL_MS}ms "
+        f"(tự dừng sau tối đa {SPAM_MAX_ITERATIONS} vòng). Gõ `!spam` lại để xem tiến độ, "
         f"`!stopspam` để dừng bất cứ lúc nào. Trạng thái bot (presence) cũng sẽ hiện '🔁 !spam đang chạy...' trong lúc chạy."
     )
 
