@@ -5,10 +5,10 @@ import time
 
 import aiohttp
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
-from config import DISCORD_BOT_TOKEN
-from telegram_service import TelegramAPIError, send_telegram_message
+from config import ALERT_CHANNEL_ID, DISCORD_BOT_TOKEN
+from telegram_service import TelegramAPIError, get_me, send_telegram_message
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("panel-bot")
@@ -66,8 +66,10 @@ class PanelBot(commands.Bot):
             logger.info("Synced %d slash command(s).", len(synced))
         except Exception:
             logger.exception("Failed to sync slash commands")
+        check_telegram_token.start()
 
     async def close(self) -> None:
+        check_telegram_token.cancel()
         if self.http_session is not None:
             await self.http_session.close()
             logger.info("Closed pooled aiohttp session.")
@@ -75,6 +77,49 @@ class PanelBot(commands.Bot):
 
 
 bot = PanelBot()
+
+# Periodic health check — the bot owner can rotate TELEGRAM_BOT_TOKEN without warning.
+TOKEN_CHECK_INTERVAL_MINUTES = 15
+telegram_token_ok = True
+
+
+async def _alert_admin(text: str) -> None:
+    """Post a message to ALERT_CHANNEL_ID, if configured. Silently no-ops otherwise."""
+    if not ALERT_CHANNEL_ID:
+        return
+    try:
+        channel = bot.get_channel(int(ALERT_CHANNEL_ID)) or await bot.fetch_channel(int(ALERT_CHANNEL_ID))
+        await channel.send(text)
+    except Exception:
+        logger.exception("Không gửi được cảnh báo vào Discord channel %s", ALERT_CHANNEL_ID)
+
+
+@tasks.loop(minutes=TOKEN_CHECK_INTERVAL_MINUTES)
+async def check_telegram_token() -> None:
+    """Call Telegram's getMe periodically; alert on a valid<->invalid transition."""
+    global telegram_token_ok
+    try:
+        me = await get_me(bot.http_session)
+    except Exception as exc:
+        if telegram_token_ok:
+            telegram_token_ok = False
+            logger.error("Telegram token không còn hợp lệ: %s", exc)
+            await _alert_admin(
+                "🚨 **Token Telegram không còn hợp lệ!**\n"
+                "Chủ bot có thể đã đổi token mà chưa kịp báo. Cập nhật `TELEGRAM_BOT_TOKEN` "
+                "trong `.env` trên VPS rồi chạy `sudo systemctl restart panel-bot`."
+            )
+        return
+
+    if not telegram_token_ok:
+        telegram_token_ok = True
+        logger.info("Telegram token đã hợp lệ trở lại (bot: @%s)", me.get("username"))
+        await _alert_admin(f"✅ Token Telegram đã hoạt động trở lại (bot: @{me.get('username')}).")
+
+
+@check_telegram_token.before_loop
+async def _before_check_telegram_token() -> None:
+    await bot.wait_until_ready()
 
 
 async def handle_action(interaction: discord.Interaction, action_key: str) -> None:

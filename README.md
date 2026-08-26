@@ -5,8 +5,8 @@ Bảng điều khiển Discord (5 nút bấm) gửi thông báo trực tiếp sa
 ## Cấu trúc
 
 - `config.py` - đọc và validate biến môi trường (`.env`)
-- `telegram_service.py` - client async gọi `POST /bot<TOKEN>/sendMessage`, dùng chung một `aiohttp.ClientSession`
-- `bot.py` - bot Discord (`PanelBot`), `ControlPanelView` (persistent) và lệnh `/dieukhien` / `!dieukhien`
+- `telegram_service.py` - client async gọi Telegram Bot API (`sendMessage`, `getMe`), dùng chung một `aiohttp.ClientSession`
+- `bot.py` - bot Discord (`PanelBot`), `ControlPanelView` (persistent), lệnh `/dieukhien` / `!dieukhien`, `!spam`/`!stopspam`, và task nền kiểm tra token Telegram định kỳ
 - `requirements.txt`, `.env.example`
 
 ## Cài đặt
@@ -48,6 +48,12 @@ Gõ `/dieukhien` (slash command, cần chờ vài giây để Discord sync) ho�
 - `!stopspam`: dừng ngay tiến trình `!spam` đang chạy.
 - Cả 2 lệnh yêu cầu quyền **Administrator** trên server Discord — người không có quyền sẽ nhận phản hồi từ chối.
 - Chỉnh `SPAM_MESSAGES`/`LOOP_INTERVAL_MS`/`DELAY_BETWEEN_MSGS_MS`/`SPAM_MAX_ITERATIONS` trực tiếp trong `bot.py` nếu cần đổi nội dung/tần suất/giới hạn.
+
+### Cảnh báo khi token Telegram bị đổi (`ALERT_CHANNEL_ID`)
+
+Bot tự động gọi `getMe` mỗi `TOKEN_CHECK_INTERVAL_MINUTES` phút (mặc định 15) để kiểm tra `TELEGRAM_BOT_TOKEN` còn dùng được không — hữu ích khi chủ bot Telegram đổi token mà chưa kịp báo. Khi phát hiện token chết (hoặc sống lại), bot gửi cảnh báo vào kênh Discord có ID đặt ở biến `ALERT_CHANNEL_ID` trong `.env`. Để trống nếu chỉ cần xem qua log server (`journalctl -u panel-bot`).
+
+Lấy Channel ID: bật Developer Mode (User Settings → Advanced → Developer Mode) → chuột phải vào kênh → Copy Channel ID.
 
 ## Deploy lên VPS (Ubuntu/Debian, dùng systemd)
 
