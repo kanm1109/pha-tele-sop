@@ -39,6 +39,13 @@ ACTIONS = {
     ),
 }
 
+# !spam config — repeats a check-in message on a timer until !stopspam or the safety cap is hit.
+SPAM_MESSAGE = "Kiểm tra kết nối."
+SPAM_INTERVAL_MS = 5000
+SPAM_MAX_ITERATIONS = 720  # safety cap: ~1 hour at the interval above, in case !stopspam is forgotten
+
+spam_task: asyncio.Task | None = None
+
 
 class PanelBot(commands.Bot):
     """Bot subclass that owns a single pooled aiohttp session for the Telegram client."""
@@ -195,6 +202,69 @@ async def panel_slash(interaction: discord.Interaction) -> None:
 @bot.command(name="dieukhien")
 async def panel_prefix(ctx: commands.Context) -> None:
     await ctx.send(embed=build_panel_embed(), view=ControlPanelView())
+
+
+async def _spam_loop() -> None:
+    """Send SPAM_MESSAGE to Telegram every SPAM_INTERVAL_MS until cancelled or capped."""
+    global spam_task
+    session: aiohttp.ClientSession = bot.http_session
+    sent = 0
+    try:
+        while sent < SPAM_MAX_ITERATIONS:
+            sent += 1
+            try:
+                await send_telegram_message(session, SPAM_MESSAGE)
+                logger.info("spam: sent message %d/%d", sent, SPAM_MAX_ITERATIONS)
+            except Exception:
+                logger.exception("spam: failed to send message %d", sent)
+            await asyncio.sleep(SPAM_INTERVAL_MS / 1000)
+        logger.info("spam: reached safety cap of %d messages, stopping automatically", SPAM_MAX_ITERATIONS)
+    except asyncio.CancelledError:
+        logger.info("spam: stopped after %d message(s)", sent)
+        raise
+    finally:
+        spam_task = None
+
+
+@bot.command(name="spam")
+@commands.has_permissions(administrator=True)
+async def cmd_spam(ctx: commands.Context) -> None:
+    global spam_task
+    if spam_task is not None and not spam_task.done():
+        await ctx.send("⚠️ Đang có tiến trình `!spam` chạy rồi. Dùng `!stopspam` để dừng trước.")
+        return
+    spam_task = bot.loop.create_task(_spam_loop())
+    await ctx.send(
+        f"✅ Đã bắt đầu gửi lặp lại mỗi {SPAM_INTERVAL_MS}ms "
+        f"(tự dừng sau tối đa {SPAM_MAX_ITERATIONS} lần). Gõ `!stopspam` để dừng bất cứ lúc nào."
+    )
+
+
+@cmd_spam.error
+async def cmd_spam_error(ctx: commands.Context, error: commands.CommandError) -> None:
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Chỉ admin mới dùng được lệnh này.")
+    else:
+        raise error
+
+
+@bot.command(name="stopspam")
+@commands.has_permissions(administrator=True)
+async def cmd_stopspam(ctx: commands.Context) -> None:
+    global spam_task
+    if spam_task is None or spam_task.done():
+        await ctx.send("ℹ️ Hiện không có tiến trình `!spam` nào đang chạy.")
+        return
+    spam_task.cancel()
+    await ctx.send("🛑 Đã dừng `!spam`.")
+
+
+@cmd_stopspam.error
+async def cmd_stopspam_error(ctx: commands.Context, error: commands.CommandError) -> None:
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Chỉ admin mới dùng được lệnh này.")
+    else:
+        raise error
 
 
 def main() -> None:
