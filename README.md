@@ -55,6 +55,16 @@ Bot tự động gọi `getMe` mỗi `TOKEN_CHECK_INTERVAL_MINUTES` phút (mặc
 
 Lấy Channel ID: bật Developer Mode (User Settings → Advanced → Developer Mode) → chuột phải vào kênh → Copy Channel ID.
 
+### Lệnh `!thaytoken <token_moi>` (chỉ admin)
+
+Khi token Telegram bị đổi, đổi ngay tại chỗ mà không cần SSH vào VPS sửa `.env` + restart:
+
+- Bot tự động **xoá tin nhắn gốc chứa token** ngay lập tức để token không lưu lại trong lịch sử chat.
+- Kiểm tra token mới bằng `getMe` trước — nếu **không hợp lệ**, giữ nguyên token cũ, không lưu gì cả, báo lỗi rõ ràng.
+- Nếu **hợp lệ**: áp dụng ngay cho các lần gửi tiếp theo (không cần restart bot) và ghi luôn vào `.env` để giữ nguyên qua các lần restart/deploy sau.
+
+Ví dụ: `!thaytoken 123456:ABC-newTokenHere`
+
 ## Deploy lên VPS (Ubuntu/Debian, dùng systemd)
 
 ```bash

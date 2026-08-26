@@ -3,7 +3,8 @@ import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+DOTENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(DOTENV_PATH)
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

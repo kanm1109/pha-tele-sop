@@ -6,9 +6,10 @@ import time
 import aiohttp
 import discord
 from discord.ext import commands, tasks
+from dotenv import set_key
 
-from config import ALERT_CHANNEL_ID, DISCORD_BOT_TOKEN
-from telegram_service import TelegramAPIError, get_me, send_telegram_message
+from config import ALERT_CHANNEL_ID, DISCORD_BOT_TOKEN, DOTENV_PATH
+from telegram_service import TelegramAPIError, get_me, get_token, send_telegram_message, set_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("panel-bot")
@@ -322,6 +323,48 @@ async def cmd_stopspam(ctx: commands.Context) -> None:
 
 @cmd_stopspam.error
 async def cmd_stopspam_error(ctx: commands.Context, error: commands.CommandError) -> None:
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Chỉ admin mới dùng được lệnh này.")
+    else:
+        raise error
+
+
+@bot.command(name="thaytoken")
+@commands.has_permissions(administrator=True)
+async def cmd_thaytoken(ctx: commands.Context, new_token: str = None) -> None:
+    """Hot-swap TELEGRAM_BOT_TOKEN: validate first, only apply + persist if it works."""
+    global telegram_token_ok
+
+    # Xoá tin nhắn gốc ngay để token không nằm lại trong lịch sử chat.
+    try:
+        await ctx.message.delete()
+    except discord.HTTPException:
+        pass
+
+    if not new_token:
+        await ctx.send("⚠️ Cú pháp: `!thaytoken <token_moi>`", delete_after=15)
+        return
+
+    status_msg = await ctx.send("⏳ Đang kiểm tra token mới...")
+    old_token = get_token()
+    set_token(new_token)
+    try:
+        me = await get_me(bot.http_session)
+    except Exception as exc:
+        set_token(old_token)  # khôi phục token cũ, không lưu token hỏng
+        await status_msg.edit(content=f"❌ Token không hợp lệ, đã giữ nguyên token cũ: {exc}")
+        return
+
+    set_key(DOTENV_PATH, "TELEGRAM_BOT_TOKEN", new_token)
+    telegram_token_ok = True
+    logger.info("Đã đổi TELEGRAM_BOT_TOKEN qua !thaytoken (bot: @%s)", me.get("username"))
+    await status_msg.edit(
+        content=f"✅ Token hợp lệ (bot: @{me.get('username')}) — đã áp dụng ngay và lưu vào `.env`."
+    )
+
+
+@cmd_thaytoken.error
+async def cmd_thaytoken_error(ctx: commands.Context, error: commands.CommandError) -> None:
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ Chỉ admin mới dùng được lệnh này.")
     else:
