@@ -1,6 +1,7 @@
 """Discord bot that relays control-panel button presses to a Telegram chat."""
 import asyncio
 import logging
+import time
 
 import aiohttp
 import discord
@@ -45,6 +46,8 @@ SPAM_INTERVAL_MS = 5000
 SPAM_MAX_ITERATIONS = 720  # safety cap: ~1 hour at the interval above, in case !stopspam is forgotten
 
 spam_task: asyncio.Task | None = None
+spam_sent_count = 0
+spam_started_at: float | None = None
 
 
 class PanelBot(commands.Bot):
@@ -206,37 +209,45 @@ async def panel_prefix(ctx: commands.Context) -> None:
 
 async def _spam_loop() -> None:
     """Send SPAM_MESSAGE to Telegram every SPAM_INTERVAL_MS until cancelled or capped."""
-    global spam_task
+    global spam_task, spam_sent_count
     session: aiohttp.ClientSession = bot.http_session
-    sent = 0
+    await bot.change_presence(activity=discord.Game(name="🔁 !spam đang chạy..."))
     try:
-        while sent < SPAM_MAX_ITERATIONS:
-            sent += 1
+        while spam_sent_count < SPAM_MAX_ITERATIONS:
+            spam_sent_count += 1
             try:
                 await send_telegram_message(session, SPAM_MESSAGE)
-                logger.info("spam: sent message %d/%d", sent, SPAM_MAX_ITERATIONS)
+                logger.info("spam: sent message %d/%d", spam_sent_count, SPAM_MAX_ITERATIONS)
             except Exception:
-                logger.exception("spam: failed to send message %d", sent)
+                logger.exception("spam: failed to send message %d", spam_sent_count)
             await asyncio.sleep(SPAM_INTERVAL_MS / 1000)
         logger.info("spam: reached safety cap of %d messages, stopping automatically", SPAM_MAX_ITERATIONS)
     except asyncio.CancelledError:
-        logger.info("spam: stopped after %d message(s)", sent)
+        logger.info("spam: stopped after %d message(s)", spam_sent_count)
         raise
     finally:
         spam_task = None
+        await bot.change_presence(activity=None)
 
 
 @bot.command(name="spam")
 @commands.has_permissions(administrator=True)
 async def cmd_spam(ctx: commands.Context) -> None:
-    global spam_task
+    global spam_task, spam_sent_count, spam_started_at
     if spam_task is not None and not spam_task.done():
-        await ctx.send("⚠️ Đang có tiến trình `!spam` chạy rồi. Dùng `!stopspam` để dừng trước.")
+        elapsed = int(time.time() - spam_started_at) if spam_started_at else 0
+        await ctx.send(
+            f"⚠️ Đang có tiến trình `!spam` chạy rồi — đã gửi **{spam_sent_count}/{SPAM_MAX_ITERATIONS}** lần, "
+            f"chạy được {elapsed}s. Dùng `!stopspam` để dừng."
+        )
         return
+    spam_sent_count = 0
+    spam_started_at = time.time()
     spam_task = bot.loop.create_task(_spam_loop())
     await ctx.send(
         f"✅ Đã bắt đầu gửi lặp lại mỗi {SPAM_INTERVAL_MS}ms "
-        f"(tự dừng sau tối đa {SPAM_MAX_ITERATIONS} lần). Gõ `!stopspam` để dừng bất cứ lúc nào."
+        f"(tự dừng sau tối đa {SPAM_MAX_ITERATIONS} lần). Gõ `!spam` lại để xem tiến độ, "
+        f"`!stopspam` để dừng bất cứ lúc nào. Trạng thái bot (presence) cũng sẽ hiện '🔁 !spam đang chạy...' trong lúc chạy."
     )
 
 
@@ -256,7 +267,7 @@ async def cmd_stopspam(ctx: commands.Context) -> None:
         await ctx.send("ℹ️ Hiện không có tiến trình `!spam` nào đang chạy.")
         return
     spam_task.cancel()
-    await ctx.send("🛑 Đã dừng `!spam`.")
+    await ctx.send(f"🛑 Đã dừng `!spam` sau khi gửi {spam_sent_count} lần.")
 
 
 @cmd_stopspam.error
