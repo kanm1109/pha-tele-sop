@@ -42,9 +42,9 @@ ACTIONS = {
 
 # !spam config — repeats check-in message(s) on a timer until !stopspam or the safety cap is hit.
 SPAM_MESSAGES = ["Kiểm tra kết nối."]
-LOOP_INTERVAL_MS = 5       # nghỉ giữa các vòng lặp
-DELAY_BETWEEN_MSGS_MS = 1  # nghỉ giữa từng tin trong 1 vòng (nếu SPAM_MESSAGES có nhiều tin)
-SPAM_MAX_ITERATIONS = 1000  # safety cap: max vòng lặp (~1 giờ ở tốc độ trên), in case !stopspam is forgotten
+LOOP_INTERVAL_MS = 4000       # nghỉ giữa các vòng lặp
+DELAY_BETWEEN_MSGS_MS = 1000  # nghỉ giữa từng tin trong 1 vòng (nếu SPAM_MESSAGES có nhiều tin)
+SPAM_MAX_ITERATIONS = 720  # safety cap: max vòng lặp (~1 giờ ở tốc độ trên), in case !stopspam is forgotten
 
 spam_task: asyncio.Task | None = None
 spam_sent_count = 0
