@@ -95,21 +95,35 @@ async def _alert_admin(text: str) -> None:
         logger.exception("Không gửi được cảnh báo vào Discord channel %s", ALERT_CHANNEL_ID)
 
 
+TOKEN_INVALID_ERROR_CODES = (401, 404)  # 401 = token bị revoke/đổi, 404 = bot không còn tồn tại
+
+
 @tasks.loop(minutes=TOKEN_CHECK_INTERVAL_MINUTES)
 async def check_telegram_token() -> None:
-    """Call Telegram's getMe periodically; alert on a valid<->invalid transition."""
+    """Call Telegram's getMe periodically; alert only on a CONFIRMED invalid token.
+
+    Distinguishes a real Telegram rejection (401/404 — token actually revoked/rotated)
+    from transient network errors (timeout, DNS, connection reset), which are logged
+    but don't flip state or alert — those just mean "try again next interval".
+    """
     global telegram_token_ok
     try:
         me = await get_me(bot.http_session)
-    except Exception as exc:
+    except TelegramAPIError as exc:
+        if exc.error_code not in TOKEN_INVALID_ERROR_CODES:
+            logger.warning("getMe trả lỗi không xác định token (bỏ qua lần này): %s", exc)
+            return
         if telegram_token_ok:
             telegram_token_ok = False
             logger.error("Telegram token không còn hợp lệ: %s", exc)
             await _alert_admin(
                 "🚨 **Token Telegram không còn hợp lệ!**\n"
-                "Chủ bot có thể đã đổi token mà chưa kịp báo. Cập nhật `TELEGRAM_BOT_TOKEN` "
-                "trong `.env` trên VPS rồi chạy `sudo systemctl restart panel-bot`."
+                "Chủ bot có thể đã đổi token mà chưa kịp báo. Đổi ngay bằng `!thaytoken <token_moi>`, "
+                "hoặc cập nhật `TELEGRAM_BOT_TOKEN` trong `.env` trên VPS rồi chạy `sudo systemctl restart panel-bot`."
             )
+        return
+    except Exception as exc:
+        logger.warning("Lỗi mạng khi kiểm tra token Telegram (tạm thời, sẽ thử lại): %s", exc)
         return
 
     if not telegram_token_ok:

@@ -51,7 +51,7 @@ Gõ `/dieukhien` (slash command, cần chờ vài giây để Discord sync) ho�
 
 ### Cảnh báo khi token Telegram bị đổi (`ALERT_CHANNEL_ID`)
 
-Bot tự động gọi `getMe` mỗi `TOKEN_CHECK_INTERVAL_MINUTES` phút (mặc định 15) để kiểm tra `TELEGRAM_BOT_TOKEN` còn dùng được không — hữu ích khi chủ bot Telegram đổi token mà chưa kịp báo. Khi phát hiện token chết (hoặc sống lại), bot gửi cảnh báo vào kênh Discord có ID đặt ở biến `ALERT_CHANNEL_ID` trong `.env`. Để trống nếu chỉ cần xem qua log server (`journalctl -u panel-bot`).
+Bot tự động gọi `getMe` mỗi `TOKEN_CHECK_INTERVAL_MINUTES` phút (mặc định 15) để kiểm tra `TELEGRAM_BOT_TOKEN` còn dùng được không — hữu ích khi chủ bot Telegram đổi token mà chưa kịp báo. Chỉ báo động khi Telegram **xác nhận rõ ràng** token sai (401 Unauthorized / 404 bot không tồn tại) — lỗi mạng tạm thời (timeout, mất kết nối thoáng qua) chỉ ghi log cảnh báo, không bắn thông báo nhầm. Cảnh báo thật gửi vào kênh Discord có ID đặt ở biến `ALERT_CHANNEL_ID` trong `.env`. Để trống nếu chỉ cần xem qua log server (`journalctl -u panel-bot`).
 
 Lấy Channel ID: bật Developer Mode (User Settings → Advanced → Developer Mode) → chuột phải vào kênh → Copy Channel ID.
 
